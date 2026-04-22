@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": ["Read", "Edit", "Bash(npm:*)"]
+  },
+  "hooks": {
+    "Stop": []
+  }
+}

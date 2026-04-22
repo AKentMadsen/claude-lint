@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claude-lint"
+version = "0.1.0"
+description = "Structural linter for .claude/ directories (skills, agents, commands, hooks, memory, settings)."
+requires-python = ">=3.10"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Kent Madsen" }]
+
+[project.scripts]
+claude-lint = "claude_lint.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

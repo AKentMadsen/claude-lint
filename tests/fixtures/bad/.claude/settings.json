@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": ["Read", "Bogus"]
+  },
+  "hooks": {
+    "NotAnEvent": []
+  }
+}
