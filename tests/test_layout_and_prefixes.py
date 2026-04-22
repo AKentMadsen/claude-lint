@@ -47,6 +47,36 @@ def test_non_claude_layout_with_config(tmp_path: Path):
     assert findings == []
 
 
+def test_bare_dirname_rejected_when_prefixes_required(tmp_path: Path):
+    skill_dir = tmp_path / ".claude" / "skills" / "my-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\n"
+        "name: my-skill\n"
+        "description: Bare dirname with no prefix — should be flagged.\n"
+        "---\n"
+    )
+    cfg = Config(name_prefixes=["devtools-", "ai-"])
+    tree = loader.load(tmp_path / ".claude", cfg)
+    findings = rules.run_all(tree, cfg)
+    assert "CL005" in {f.rule_id for f in findings}
+
+
+def test_bare_dirname_accepted_without_prefixes(tmp_path: Path):
+    skill_dir = tmp_path / ".claude" / "skills" / "my-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\n"
+        "name: my-skill\n"
+        "description: No prefixes configured — bare dirname should pass.\n"
+        "---\n"
+    )
+    cfg = Config()
+    tree = loader.load(tmp_path / ".claude", cfg)
+    findings = rules.run_all(tree, cfg)
+    assert "CL005" not in {f.rule_id for f in findings}
+
+
 def test_folded_scalar_agent_does_not_trigger_parse_error(tmp_path: Path):
     agents = tmp_path / ".claude" / "agents"
     agents.mkdir(parents=True)

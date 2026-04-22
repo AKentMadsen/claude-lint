@@ -30,6 +30,7 @@ class Config:
     agents_dirs: list[str] = field(default_factory=list)
     recursive_skills: bool = False
     ignore_paths: list[str] = field(default_factory=list)
+    prefix_required_paths: list[str] = field(default_factory=list)
 
 
 def load(start: Path) -> Config:
@@ -59,6 +60,7 @@ def load(start: Path) -> Config:
             cfg.agents_dirs = list(data.get("agents_dirs", []))
             cfg.recursive_skills = bool(data.get("recursive_skills", False))
             cfg.ignore_paths = list(data.get("ignore_paths", []))
+            cfg.prefix_required_paths = list(data.get("prefix_required_paths", []))
             break
         if cur.parent == cur:
             break

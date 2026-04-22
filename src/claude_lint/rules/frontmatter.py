@@ -35,12 +35,15 @@ def _expected_name(kind: str, f: ParsedFile) -> str:
     return f.path.stem
 
 
-def _name_is_valid(name: str, expected: str, prefixes: list[str]) -> bool:
-    """A name is valid if it matches the dirname directly, a prefix + dirname,
-    or a fully-qualified form `{prefix}-...-{dirname}` (category-prefixed with
-    an intermediate ancestor chain)."""
+def _name_is_valid(kind: str, name: str, expected: str, prefixes: list[str]) -> bool:
+    """A name is valid if it matches the dirname, or — for skills when
+    prefixes are configured — follows the `{prefix}{dirname}` /
+    `{prefix}-...-{dirname}` fully-qualified form.
+
+    Prefix enforcement applies to skills only; agents and commands accept
+    a bare dirname regardless of whether prefixes are configured."""
     if name == expected:
-        return True
+        return kind != "skill" or not prefixes
     for p in prefixes:
         if name == f"{p}{expected}":
             return True
@@ -121,7 +124,11 @@ def _check_file(kind: str, f: ParsedFile, cfg: Config) -> list[Finding]:
 
     name = fm.get("name")
     expected = _expected_name(kind, f)
-    if isinstance(name, str) and name and not _name_is_valid(name, expected, cfg.name_prefixes):
+    # Prefix requirement only applies to configured scope when set; else global.
+    prefix_scope = cfg.prefix_required_paths
+    in_scope = (not prefix_scope) or any(tok in str(f.path) for tok in prefix_scope)
+    effective_prefixes = cfg.name_prefixes if in_scope else []
+    if isinstance(name, str) and name and not _name_is_valid(kind, name, expected, effective_prefixes):
         out.append(
             Finding(
                 rule_id="CL005",
