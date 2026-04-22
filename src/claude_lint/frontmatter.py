@@ -98,11 +98,19 @@ def parse(text: str) -> tuple[dict | None, str, str | None, int | None]:
     data: dict = {}
     i = 0
     current_key = None
+
+    def _indent(s: str) -> int:
+        return len(s) - len(s.lstrip(" "))
+
     try:
         while i < len(fm_lines):
             raw = fm_lines[i]
             stripped = raw.strip()
             if not stripped or stripped.startswith("#"):
+                i += 1
+                continue
+            # top-level keys only — skip nested indented content (e.g. metadata: block)
+            if _indent(raw) > 0 and current_key is not None and not stripped.startswith("- "):
                 i += 1
                 continue
             # block-list continuation
@@ -119,9 +127,47 @@ def parse(text: str) -> tuple[dict | None, str, str | None, int | None]:
             key = key.strip()
             rest = rest.strip()
             current_key = key
+            # folded '>' or literal '|' block scalar
+            if rest in (">", "|", ">-", "|-", ">+", "|+"):
+                folded = rest[0] == ">"
+                base_indent = _indent(raw)
+                buf_lines: list[str] = []
+                j = i + 1
+                while j < len(fm_lines):
+                    ln = fm_lines[j]
+                    if ln.strip() == "" or _indent(ln) > base_indent:
+                        buf_lines.append(ln[base_indent + 2 :] if len(ln) > base_indent + 2 else ln.strip())
+                        j += 1
+                    else:
+                        break
+                if folded:
+                    # join with spaces, blank lines become newlines
+                    parts: list[str] = []
+                    run: list[str] = []
+                    for ln in buf_lines:
+                        if ln.strip() == "":
+                            if run:
+                                parts.append(" ".join(run))
+                                run = []
+                            parts.append("")
+                        else:
+                            run.append(ln.strip())
+                    if run:
+                        parts.append(" ".join(run))
+                    data[key] = "\n".join(p for p in parts if p != "" or True).strip()
+                else:
+                    data[key] = "\n".join(buf_lines).rstrip()
+                i = j
+                continue
             if not rest:
-                # could be a block list next
-                data[key] = []
+                # could be a block list or nested mapping — peek ahead
+                nxt = i + 1
+                while nxt < len(fm_lines) and not fm_lines[nxt].strip():
+                    nxt += 1
+                if nxt < len(fm_lines) and fm_lines[nxt].lstrip().startswith("- "):
+                    data[key] = []
+                else:
+                    data[key] = {}  # nested mapping — we capture as opaque
                 i += 1
                 continue
             if rest.startswith("["):

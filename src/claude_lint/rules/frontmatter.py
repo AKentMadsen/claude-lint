@@ -35,6 +35,20 @@ def _expected_name(kind: str, f: ParsedFile) -> str:
     return f.path.stem
 
 
+def _name_is_valid(name: str, expected: str, prefixes: list[str]) -> bool:
+    """A name is valid if it matches the dirname directly, a prefix + dirname,
+    or a fully-qualified form `{prefix}-...-{dirname}` (category-prefixed with
+    an intermediate ancestor chain)."""
+    if name == expected:
+        return True
+    for p in prefixes:
+        if name == f"{p}{expected}":
+            return True
+        if name.startswith(p) and name.endswith(f"-{expected}"):
+            return True
+    return False
+
+
 def _check_file(kind: str, f: ParsedFile, cfg: Config) -> list[Finding]:
     out: list[Finding] = []
     if f.frontmatter_error:
@@ -107,7 +121,7 @@ def _check_file(kind: str, f: ParsedFile, cfg: Config) -> list[Finding]:
 
     name = fm.get("name")
     expected = _expected_name(kind, f)
-    if isinstance(name, str) and name and name != expected:
+    if isinstance(name, str) and name and not _name_is_valid(name, expected, cfg.name_prefixes):
         out.append(
             Finding(
                 rule_id="CL005",
@@ -119,6 +133,11 @@ def _check_file(kind: str, f: ParsedFile, cfg: Config) -> list[Finding]:
         )
 
     tools = fm.get("tools")
+    # accept "tools: Read, Bash, Grep" as a scalar — split on comma
+    if isinstance(tools, str) and "," in tools:
+        tools = [t.strip() for t in tools.split(",") if t.strip()]
+    elif isinstance(tools, str) and tools.strip():
+        tools = [tools.strip()]
     if isinstance(tools, list):
         allowed = KNOWN_TOOLS | cfg.extra_tools
         for t in tools:

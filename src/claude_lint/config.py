@@ -25,6 +25,11 @@ class Config:
     max_description_chars: int = 400
     disabled_rules: set[str] = field(default_factory=set)
     extra_tools: set[str] = field(default_factory=set)
+    name_prefixes: list[str] = field(default_factory=list)
+    skills_dirs: list[str] = field(default_factory=list)
+    agents_dirs: list[str] = field(default_factory=list)
+    recursive_skills: bool = False
+    ignore_paths: list[str] = field(default_factory=list)
 
 
 def load(start: Path) -> Config:
@@ -49,6 +54,11 @@ def load(start: Path) -> Config:
             )
             cfg.disabled_rules = set(data.get("disabled_rules", []))
             cfg.extra_tools = set(data.get("extra_tools", []))
+            cfg.name_prefixes = list(data.get("name_prefixes", []))
+            cfg.skills_dirs = list(data.get("skills_dirs", []))
+            cfg.agents_dirs = list(data.get("agents_dirs", []))
+            cfg.recursive_skills = bool(data.get("recursive_skills", False))
+            cfg.ignore_paths = list(data.get("ignore_paths", []))
             break
         if cur.parent == cur:
             break

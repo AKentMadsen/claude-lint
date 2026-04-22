@@ -61,15 +61,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"claude-lint: path does not exist: {start}", file=sys.stderr)
         return 2
 
-    dirs = loader.find_claude_dirs(start)
+    cfg = config.load(start)
+    dirs = loader.find_claude_dirs(start, cfg)
     if not dirs:
         print(f"claude-lint: no .claude directory found under {start}", file=sys.stderr)
         return 2
 
-    cfg = config.load(start)
     all_findings = []
     for cdir in dirs:
-        tree = loader.load(cdir)
+        tree = loader.load(cdir, cfg)
         findings = rules.run_all(tree, cfg)
         findings = _filter_min(findings, args.min_severity)
         all_findings.extend(findings)

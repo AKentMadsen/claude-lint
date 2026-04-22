@@ -54,15 +54,20 @@ def _check_memory(tree: ClaudeTree) -> list[Finding]:
     return out
 
 
+def _identity(f) -> str:
+    """Prefer the frontmatter `name:` field; fall back to dirname/stem."""
+    if f.frontmatter and isinstance(f.frontmatter.get("name"), str):
+        n = f.frontmatter["name"].strip()
+        if n:
+            return n
+    return f.path.parent.name if f.path.name == "SKILL.md" else f.path.stem
+
+
 def _check_duplicates(tree: ClaudeTree) -> list[Finding]:
     out: list[Finding] = []
     seen: dict[str, Path] = {}
     for f in tree.skills:
-        name = (
-            f.path.parent.name
-            if f.path.name == "SKILL.md"
-            else f.path.stem
-        )
+        name = _identity(f)
         if name in seen:
             out.append(
                 Finding(
@@ -76,7 +81,7 @@ def _check_duplicates(tree: ClaudeTree) -> list[Finding]:
             seen[name] = f.path
     agent_seen: dict[str, Path] = {}
     for f in tree.agents:
-        name = f.path.stem
+        name = _identity(f)
         if name in agent_seen:
             out.append(
                 Finding(

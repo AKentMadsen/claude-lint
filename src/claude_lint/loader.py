@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from claude_lint import frontmatter
+from claude_lint.config import Config
 from claude_lint.models import ClaudeTree, ParsedFile
 
 
@@ -21,9 +22,16 @@ def _read(path: Path) -> ParsedFile:
     )
 
 
-def _iter_skill_files(root: Path) -> list[Path]:
+def _iter_skill_files(root: Path, recursive: bool) -> list[Path]:
     files: list[Path] = []
     if not root.exists():
+        return files
+    if recursive:
+        for p in sorted(root.rglob("SKILL.md")):
+            files.append(p)
+        for p in sorted(root.glob("*.md")):
+            if p.is_file() and p.name != "SKILL.md":
+                files.append(p)
         return files
     for child in sorted(root.iterdir()):
         if child.is_dir():
@@ -35,17 +43,49 @@ def _iter_skill_files(root: Path) -> list[Path]:
     return files
 
 
-def load(claude_dir: Path) -> ClaudeTree:
-    """Load a single .claude/ directory (not nested)."""
+def _is_ignored(path: Path, ignore_paths: list[str]) -> bool:
+    s = str(path)
+    return any(tok in s for tok in ignore_paths)
+
+
+def load(claude_dir: Path, cfg: Config | None = None) -> ClaudeTree:
+    """Load a single project root or .claude/ directory.
+
+    When `cfg.skills_dirs` / `cfg.agents_dirs` are set, they override the
+    default `.claude/skills` and `.claude/agents`. Paths are resolved relative
+    to `claude_dir.parent` when `claude_dir` is itself `.claude`, else to
+    `claude_dir` itself.
+    """
+    cfg = cfg or Config()
     tree = ClaudeTree(root=claude_dir)
 
-    # skills — each skill is a directory containing SKILL.md, or a bare .md
-    tree.skills = [_read(p) for p in _iter_skill_files(claude_dir / "skills")]
+    # Resolve project root — if we were handed a .claude/ dir, its parent is root.
+    project_root = claude_dir.parent if claude_dir.name == ".claude" else claude_dir
 
-    # agents — flat .md files
-    agents_dir = claude_dir / "agents"
-    if agents_dir.exists():
-        tree.agents = [_read(p) for p in sorted(agents_dir.glob("*.md"))]
+    def _resolve(paths: list[str], default: Path) -> list[Path]:
+        if not paths:
+            return [default]
+        return [project_root / p for p in paths]
+
+    skill_roots = _resolve(cfg.skills_dirs, claude_dir / "skills")
+    agent_roots = _resolve(cfg.agents_dirs, claude_dir / "agents")
+
+    # skills
+    skill_files: list[Path] = []
+    for root in skill_roots:
+        for p in _iter_skill_files(root, cfg.recursive_skills):
+            if not _is_ignored(p, cfg.ignore_paths):
+                skill_files.append(p)
+    tree.skills = [_read(p) for p in skill_files]
+
+    # agents — flat .md files per root
+    agent_files: list[Path] = []
+    for root in agent_roots:
+        if root.exists():
+            for p in sorted(root.glob("*.md")):
+                if not _is_ignored(p, cfg.ignore_paths):
+                    agent_files.append(p)
+    tree.agents = [_read(p) for p in agent_files]
 
     # commands — flat .md files
     cmds_dir = claude_dir / "commands"
@@ -94,19 +134,32 @@ def load(claude_dir: Path) -> ClaudeTree:
     return tree
 
 
-def find_claude_dirs(start: Path) -> list[Path]:
-    """Find .claude directories to lint.
+def find_claude_dirs(start: Path, cfg: Config | None = None) -> list[Path]:
+    """Find directories to lint.
 
-    If `start` is a .claude dir, lint that.
-    If `start` contains a .claude dir, lint that.
-    Otherwise, search one level deep (useful when pointed at a parent workspace).
+    Precedence:
+    1. `start` is a .claude dir → lint that.
+    2. `start/.claude` exists → lint that.
+    3. `cfg` overrides skills/agents dirs → treat `start` as the project root.
+    4. `start` has root-level `agents/` or `skill-library/` → treat `start` as root.
+    5. Otherwise scan one level deep for `*/.claude`.
     """
     start = start.resolve()
     if start.name == ".claude" and start.is_dir():
         return [start]
     direct = start / ".claude"
     if direct.is_dir():
+        # also include the project root when config overrides exist
+        if cfg and (cfg.skills_dirs or cfg.agents_dirs):
+            return [start]
         return [direct]
+    if cfg and (cfg.skills_dirs or cfg.agents_dirs):
+        return [start]
+    # auto-detect a non-.claude skill/agent repo
+    if start.is_dir() and (
+        (start / "agents").is_dir() or (start / "skill-library").is_dir()
+    ):
+        return [start]
     found: list[Path] = []
     if start.is_dir():
         for child in start.iterdir():
